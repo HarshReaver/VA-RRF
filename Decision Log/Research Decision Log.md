@@ -168,6 +168,22 @@ This file records methodological decisions and the reasoning behind them. It is 
 
 **Research relevance:** The literature provides a reasonable motivation for investigating dynamic $k$, but it does not by itself establish that a particular dynamic mechanism will work. The next research question is what measurable property of the current retrieval results should drive the adaptation.
 
+### Why dispersion?
+
+**Decision:** Investigate score dispersion as a candidate signal for adapting RRF $k$.
+
+**Reason:** RRF uses rank positions but discards the numerical gaps between retrieved scores. Score dispersion describes how tightly or widely those scores are distributed for the current query. For example, scores such as $0.99, 0.70, 0.40, 0.15$ show a much sharper separation than $0.99, 0.98, 0.97, 0.96$.
+
+**Why it is relevant:** A score distribution can provide information about whether a retriever produced a clear separation between a few high-scoring candidates and the rest, or a flatter set of candidates with similar scores. The literature also shows that retrieval score distributions can vary by query and can be used in adaptive retrieval decisions.
+
+**Alternatives considered:** Top-score margin, rank agreement between dense and sparse lists, score normalization, and learned confidence or reflection mechanisms.
+
+**Why dispersion is attractive:** It is simple to compute from the scores already returned by the retrievers, requires no neural model, and can be used only to modify $k$ while leaving the final fusion itself rank-based.
+
+**Limitation:** Dispersion is not a direct measure of relevance or correctness. A retriever can produce a highly separated score distribution and still retrieve the wrong documents. Dispersion can also be affected by outliers, modality-specific score scales, and the number of retrieved candidates.
+
+**Research relevance:** Dispersion is therefore a heuristic signal that requires experimental validation. The next decision is which dispersion statistic is most appropriate for dense and sparse retrieval.
+
 ## Evaluation
 
 ### Why BEIR?
