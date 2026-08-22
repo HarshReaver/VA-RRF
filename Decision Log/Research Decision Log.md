@@ -105,23 +105,21 @@ This solves a **context-quantity** problem. Dynamic RRF $k$ solves a different p
 
 Learned fusion weights change how much each retrieval channel contributes to the final ranking. For example, a system may learn to trust dense retrieval more than sparse retrieval for a particular dataset.
 
-This can outperform an untuned RRF baseline when good validation or training data is available. However, the learned weights are tied more closely to that data and may need to be retuned when the retrieval environment changes.
-
-Our research is considering a different direction: a lightweight, zero-shot rule that could use information from the current retrieval results themselves. This remains a research hypothesis and still needs to be tested.
+This can outperform an untuned RRF baseline when good validation or training data is available. However, the learned weights are tied more closely to that data and may need to be retuned when the retrieval environment changes. Our research instead aims to investigate a lightweight, zero-shot control signal that comes directly from the current retrieval results.
 
 ## Our Solution
 
 ### Why Dynamic $k$?
 
-A natural question is whether $k$ should always stay fixed. A query-dependent $k$ would let different queries use different decay settings, while a modality-dependent design would allow dense and sparse retrieval to use different values for the same query.
+The natural extension of the static baseline is to let $k$ change when the retrieval situation changes. A query-dependent $k$ means that each query can receive its own decay setting. A modality-dependent design goes one step further and allows values such as $k_{dense}$ and $k_{sparse}$ for the same query.
 
-This is different from offline grid search. Grid search chooses one value before deployment; a dynamic method would choose the value at inference time using the current retrieval situation.
+The key difference from grid search is that grid search chooses one value before deployment, while a dynamic method chooses the value at inference time. This could allow the system to react to the actual behaviour of the current retrieval lists.
 
-At this stage, **dynamic $k$ is a research direction, not a confirmed improvement**. We still need to determine whether it helps at all, what information should control it, and whether it can beat the fixed $k=60$ baseline consistently.
+This is still a hypothesis. A poorly designed dynamic rule could be less stable or less accurate than fixed $k=60$, so every dynamic method must be compared against the baseline.
 
 ### Why dispersion?
 
-One possible source of information is **score dispersion**, which means how tightly or widely the retrieved scores are grouped.
+RRF knows the rank positions but ignores the numerical gaps between the scores that created those ranks. We therefore considered **score dispersion**, which simply asks how tightly or widely the retrieved scores are grouped.
 
 For example, these two lists can have exactly the same ranks:
 
@@ -135,54 +133,94 @@ $$
 0.99,\ 0.98,\ 0.97,\ 0.96
 $$
 
-The first has a clear score separation, while the second is much flatter. RRF sees only rank 1, rank 2, rank 3, and rank 4. A dispersion statistic could therefore provide information that rank-only fusion currently ignores.
+The first has a clear score separation, while the second is much flatter. RRF sees only rank 1, rank 2, rank 3, and rank 4. A dispersion statistic gives us one possible way to recover some of the information that rank-only fusion discarded.
 
-However, this is only a **candidate hypothesis**. Dispersion is not a direct measure of relevance. A retriever can produce a sharply separated list and still be wrong. Outliers, modality differences, and candidate-pool size can also distort the statistic.
-
-So the current question is not "how do we use dispersion?" but **"does dispersion contain a useful signal for choosing $k$?"** That must be established experimentally.
+However, dispersion is not a confidence score and is not proof that the top document is relevant. A model can be very confident and still be wrong. Therefore, dispersion is only a **heuristic signal** that needs experimental validation.
 
 ### Why compare Variance, SD, CV, and IQR?
 
-We should not select one statistic before testing it. The literature we reviewed does not directly establish that Variance, Standard Deviation, Coefficient of Variation (CV), or Interquartile Range (IQR) is the correct signal for controlling the RRF smoothing constant.
+We cannot choose the statistic just because it sounds intuitive. The literature we reviewed does not directly compare these four statistics for controlling the RRF smoothing constant. Choosing one as the winner before testing it would therefore be an unsupported assumption.
 
-Variance and standard deviation measure absolute spread, so their values depend on the numerical scale of the scores. IQR is more resistant to outliers but mainly describes the middle half of the distribution. CV measures spread relative to the mean, which may make it useful when comparing different score scales, but it can become unstable when the mean is near zero and requires care with negative scores.
+Variance and standard deviation are simple measures of absolute spread, but their values change when the score scale changes. This makes them difficult to compare directly between dense and sparse retrieval. IQR is much more resistant to outliers, but because it focuses on the middle 50% of the scores it may miss a sharp change near the top of the ranking.
 
-Therefore, **no dispersion statistic is selected yet**. These metrics are candidates for experiments. We should compare their behaviour on real dense and sparse retrieval outputs before deciding whether any of them belongs in the final method.
+CV is attractive because it measures spread relative to the mean. It can help compare relative spread when raw score scales differ, but it relies on the mean and can become unstable or hard to interpret when the mean is near zero or scores can be negative.
+
+At this stage, we will **not select a final dispersion statistic**. CV and a normalized-SD alternative are candidate approaches to test, because the literature does not establish which statistic should control $k$. The experiment will decide whether either candidate is useful, whether another statistic performs better, or whether dispersion should be abandoned entirely.
 
 ### Why CV?
 
-CV is one candidate statistic, not our confirmed solution.
+CV is a candidate, not our confirmed solution. We are considering it because it measures spread relative to the mean and may be more comparable across different score scales than raw variance or standard deviation.
 
-It is interesting because it measures spread relative to the mean, which can make it less dependent on the raw units of the scores than variance or standard deviation. That makes it worth testing for dense and sparse retrieval, which can produce different score scales.
+The exact mapping from a dispersion statistic to $k$ is **not finalized**. We will first inspect the candidate statistics on real retrieval outputs and determine whether dispersion has a useful relationship with the choice of $k$ at all.
 
-But we have not established that CV is stable, predictive of a useful $k$, or better than other statistics. We also have not chosen a final mapping from a statistic to $k$.
-
-The earlier expression
-
-$$
-k_m = 60e^{-\beta CV_m}
-$$
-
-is therefore **only an example candidate mapping**, not the committed algorithm. We may test it, replace it with another mapping, use another statistic, or abandon dispersion entirely depending on the experimental results.
+If CV is unstable or does not help retrieval, we will not force it into the final method. We can instead test another statistic, another mapping, or abandon the dispersion-based approach altogether.
 
 ### Why zero-shot?
 
-A zero-shot approach is attractive because it would use the current retrieval results without requiring a labelled training pipeline. That keeps the method lightweight and makes it easier to test across different datasets.
+The goal is to see whether the current retrieval results themselves contain enough information to choose a useful $k$. A zero-shot method does not need a labelled training pipeline for that decision.
 
-However, zero-shot does not automatically mean better. A trained fusion model can learn dataset-specific patterns that a simple rule cannot. This is a trade-off that the experiments must measure.
+This keeps the method lightweight and makes cross-dataset evaluation easier. The trade-off is that the method cannot learn a dataset-specific pattern from relevance labels, so it may not reach the peak accuracy of a well-trained fusion model.
 
 ### Why unsupervised?
 
-The proposed control signal is being considered from the retrieval results themselves rather than from labelled relevance judgments. This keeps the method simpler and makes it easier to reproduce.
+We want the proposed control signal to come from the retrieval scores rather than from labelled relevance judgments. That keeps the method easier to reproduce and keeps the research focused on whether the retrieval distribution itself contains a useful signal.
 
-Zero-shot and unsupervised are related but not identical. An unsupervised method can still contain manually tuned parameters. We therefore need to be careful not to call the final method "zero-tuning" until the experimental design establishes that claim.
+Zero-shot and unsupervised are related but not identical. A method can be unsupervised and still contain manually tuned parameters. This distinction will matter when we evaluate any mapping parameters and safety rules in the final method.
 
 ## Evaluation
 
 ### Why BEIR?
 
+BEIR is a benchmark designed to test information-retrieval systems across multiple tasks and domains. Its diversity is useful for this research because a candidate rule should not only work on one type of dataset.
+
+We do not need to run the entire benchmark. A smaller set of clearly different datasets can make the experiment feasible while still testing whether the behaviour changes across domains and tasks. The exact subset should be finalized after checking the available pre-computed runs and the computational cost.
+
 ### Why NDCG?
+
+NDCG measures both **which relevant documents are retrieved** and **where they appear in the ranking**. This matters because our research changes the order of documents, not just whether they are present.
+
+For example, suppose two systems retrieve the same three relevant documents in their top 10. If one puts them at ranks 1, 2, and 3 while the other puts them at ranks 8, 9, and 10, NDCG gives the first system a much better score because the useful documents appear earlier.
+
+We will use NDCG@10 as a candidate primary ranking metric because the top part of a retrieval list is especially important in retrieval evaluation. The exact cutoff should remain consistent across all methods.
 
 ### Why MRR?
 
+MRR focuses on the position of the **first relevant result**. For one query, a relevant document at rank 1 gives a reciprocal rank of $1$, while a relevant document at rank 5 gives $0.2$.
+
+This gives us a useful second perspective. NDCG@10 evaluates the quality of the whole top-ranked set, while MRR emphasizes how quickly the first useful result appears.
+
+Using both helps us detect different effects of a dynamic fusion rule. A method could improve the first relevant result while making the rest of the top 10 worse, or it could improve the overall ranking without moving the first relevant result much.
+
 ### Why CPU-only?
+
+The core research operation is the **fusion step**. If the dense and sparse retrieval runs are already available, calculating ranks, score statistics, and fusion scores involves ordinary numerical operations that can be performed on a CPU.
+
+This does not mean the entire retrieval pipeline is CPU-only. Generating dense embeddings or producing dense retrieval runs may require substantial model computation. For our experiment, we can separate that stage from the fusion study by using pre-computed retrieval runs where available.
+
+The CPU-only claim should therefore be limited to the fusion and dynamic-$k$ calculation itself. We can measure its actual execution time rather than assuming the overhead is negligible.
+
+## Evaluation Plan
+
+The experiment should remain an **isolated retrieval-fusion study**. We do not need to build a complete RAG application or generate LLM answers to test the central research question.
+
+The basic pipeline is:
+
+```text
+Pre-computed dense run + pre-computed sparse run
+                    ↓
+              Fusion methods
+                    ↓
+              Ranked documents
+                    ↓
+             BEIR relevance data
+                    ↓
+             NDCG@10 + MRR
+```
+
+We should begin with a small, diverse subset of BEIR rather than committing to all datasets. The final subset should be chosen based on dataset diversity, availability of compatible runs, and practical runtime.
+
+The first comparisons should include standard RRF with several fixed $k$ values so that the fixed-$k$ behaviour is understood before adding any dynamic rule. After that, candidate dynamic signals can be tested against the same inputs.
+
+We should not decide in advance that CV, normalized SD, or any particular mapping function will be the final method. Those are experimental candidates.
+
+Latency can be measured for the **fusion calculation itself** as an additional systems metric. An LLM generation stage, ROUGE/BLEU evaluation, or a complete vector-database deployment is not necessary for answering the core retrieval-fusion question.
