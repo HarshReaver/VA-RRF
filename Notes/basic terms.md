@@ -12,6 +12,8 @@ The main advantage is that it preserves score magnitude: a large confidence gap 
 
 The main difficulty is that different retrievers can produce scores on incompatible scales. Their scores may therefore need normalization, and the fusion weight may need tuning.
 
+**Real-life analogy:** Imagine two teachers grading the same student. One gives marks out of 100 and another gives marks out of 10. Adding the raw marks would be meaningless unless their scales are aligned first.
+
 ## 2. Reciprocal Rank Fusion (RRF)
 
 RRF ignores raw score magnitude and combines the **rank positions** assigned by different retrievers.
@@ -27,6 +29,8 @@ The standard formulation traditionally uses $k = 60$.
 ### Why RRF is useful
 
 Because it uses ranks rather than raw scores, RRF does not require the score scales of different retrievers to be aligned. This makes it particularly convenient for hybrid retrieval involving sparse and dense systems.
+
+**Real-life analogy:** Two shopping websites rank the same products differently. Instead of comparing their internal recommendation scores, you simply look at where each product appears in each list and reward products that consistently rank near the top.
 
 ### Main limitation
 
@@ -53,7 +57,7 @@ Imagine two documents:
 - Document A appears at rank 1 in one retriever and nowhere else.
 - Document B appears around rank 5 in several retrievers.
 
-With a small $k$, A receives a strong advantage from its rank-1 position. With a larger $k$, B's repeated mid-level appearances become relatively more competitive.
+With a small $k$, A receives a stronger advantage from its rank-1 position. With a larger $k$, B's repeated mid-level appearances become relatively more competitive.
 
 The exact effect depends on all retrieval lists, so $k$ should be understood as controlling the **shape of rank decay**, not as a direct measure of document relevance.
 
@@ -61,7 +65,9 @@ The exact effect depends on all retrieval lists, so $k$ should be understood as 
 
 A **static $k$** uses the same value for every query.
 
-A **dynamic $k$** changes according to information available for the current query or retrieval result. The idea is similar to using different camera exposure settings for different lighting conditions: one fixed setting is simple, but different conditions may require different settings.
+A **dynamic $k$** changes according to information available for the current query or retrieval result.
+
+**Real-life analogy:** A car's automatic transmission changes gears depending on the road and speed. A fixed gear can work, but changing it according to the current conditions can be more responsive. Dynamic $k$ follows the same idea: the rank-decay setting may change according to the current retrieval situation.
 
 ### Offline global tuning
 
@@ -87,22 +93,48 @@ $$
 
 A steep decay strongly favors the first few ranks. A flat decay gives lower-ranked results relatively more influence.
 
-In real life, this is like deciding how much attention to give a recommendation based on its position in a ranked list. A steep rule says "first place matters a lot more"; a flatter rule says "several good-looking options should remain competitive."
+**Real-life analogy:** A search engine may treat the first result as much more important than the tenth. Increasing $k$ is like making that preference less extreme.
 
 ## 6. Score Distribution
 
-A **score distribution** describes how the retrieval scores are spread across the returned documents.
+A **score distribution** describes how retrieval scores are spread across the returned documents.
 
 For example:
 
 - Scores such as $0.99, 0.98, 0.97, 0.96$ form a relatively tight group.
 - Scores such as $0.99, 0.70, 0.40, 0.15$ show a much sharper drop.
 
-The first pattern suggests that the retrieved candidates have similar scores. The second suggests that the top result is separated much more strongly from the rest.
+The first pattern is a **plateau**: many candidates have similar scores. The second is a **cliff**: one or a few candidates stand clearly above the rest.
 
-Our research asks whether this information can help determine how strongly RRF should emphasize rank positions.
+RRF cannot see this difference because both lists can have exactly the same rank positions.
 
-## 7. Variance and Standard Deviation
+**Real-life example:** Suppose a search for "best laptop for programming" gives five results with nearly identical relevance scores. The retriever is not finding a clear winner. A different query might produce one result far above all others. Score distribution exposes that difference; rank alone does not.
+
+## 7. Score Dispersion
+
+**Score dispersion** means how widely the scores are spread around the center of the distribution. In simple terms, it asks: **Are the scores tightly packed or widely separated?**
+
+High dispersion can look like:
+
+$$
+0.99,\ 0.70,\ 0.40,\ 0.15
+$$
+
+Low dispersion can look like:
+
+$$
+0.99,\ 0.98,\ 0.97,\ 0.96
+$$
+
+Dispersion gives information about score gaps that rank positions throw away.
+
+### Important caution
+
+High dispersion does **not** mean high relevance. A model can be very confident and still be wrong. Therefore, dispersion is treated as a **heuristic signal** rather than a direct measure of truth or relevance.
+
+**Real-life analogy:** A student may score 98, 70, 40, 15 on four topics. The large spread tells you their performance is uneven; it does not tell you whether the grading itself was correct.
+
+## 8. Variance and Standard Deviation
 
 **Variance** measures how far scores spread from their average, using squared differences.
 
@@ -112,7 +144,9 @@ A larger SD means the scores are more dispersed; a smaller SD means they are mor
 
 These are descriptive statistics, not measures of retrieval relevance by themselves. In this research they are candidate signals that may describe the local shape of a retrieval score list.
 
-## 8. Coefficient of Variation (CV)
+**Simple example:** Scores $10, 10, 10, 10$ have almost no spread, while $2, 6, 10, 14$ have much more spread.
+
+## 9. Coefficient of Variation (CV)
 
 The **Coefficient of Variation (CV)** measures spread relative to the mean:
 
@@ -122,7 +156,7 @@ $$
 
 where $\sigma$ is the standard deviation and $\mu$ is the mean.
 
-This makes CV useful when comparing distributions whose raw score scales differ.
+This can help compare relative spread when raw score scales differ.
 
 ### Simple example
 
@@ -134,21 +168,57 @@ $$
 CV = 0.10
 $$
 
-So CV says their spread is 10% of the mean in both cases.
+So CV says their spread is 10% of their mean in both cases.
 
 That is why CV is being considered as a candidate dispersion signal for dense and sparse retrieval, rather than because CV is automatically the correct choice. The research must test this assumption.
 
-## 9. Zero-Shot and Unsupervised
+## 10. Interquartile Range (IQR)
+
+**Interquartile Range (IQR)** measures the spread of the middle 50% of the scores:
+
+$$
+IQR = Q_3 - Q_1
+$$
+
+where $Q_1$ is the 25th percentile and $Q_3$ is the 75th percentile.
+
+IQR is often less affected by extreme outliers than variance or standard deviation.
+
+**Why it matters here:** If one retrieval result has an unusually large score, IQR may describe the typical spread of the list more reliably than a measure that reacts strongly to that outlier.
+
+## 11. Score Margin
+
+A **score margin** is the difference between two scores, often the top two:
+
+$$
+\mathrm{Margin} = S_1 - S_2
+$$
+
+A large margin means the top result is far ahead of the runner-up. A small margin means they are close.
+
+**Strength:** Very simple and focused on the top of the ranking.
+
+**Limitation:** It ignores what happens further down the list. Two retrieval runs could have the same top-two margin but very different score distributions in the remaining 50 documents.
+
+## 12. Rank Agreement
+
+**Rank agreement** measures how much different retrieval systems agree on which documents should appear near the top.
+
+For example, if BM25 and dense retrieval both put the same documents in their top 10, they have high agreement. If their top 10 lists barely overlap, they have low agreement.
+
+Rank agreement is scale-free, but it describes **agreement between systems**, not the internal score distribution of one system.
+
+## 13. Zero-Shot and Unsupervised
 
 **Zero-shot** means applying a method to a query without training the method specifically for that query or target dataset.
 
 **Unsupervised** means the method does not learn from labelled relevance judgments.
 
-They are related but not identical. A method can be unsupervised but still use manually tuned parameters, for example.
+They are related but not identical. A method can be unsupervised but still use manually tuned parameters.
 
 For this research, the desired direction is a lightweight method that can adapt using information already present in the current retrieval results rather than requiring a labelled training pipeline.
 
-## 10. Top-K
+## 14. Top-K
 
 **Top-K** is the number of highest-ranked documents retained after retrieval.
 
@@ -156,12 +226,28 @@ For example, Top-5 means only the five highest-ranked results are passed to the 
 
 Adaptive Top-K changes this number depending on the query or retrieval conditions. It changes **how many documents are kept**, not the RRF rank-decay formula itself.
 
-## 11. The Research Trade-off
+## 15. Outlier
+
+An **outlier** is a value that is unusually far from the other observations in a dataset.
+
+In retrieval, an outlier could be one document with an unusually high score compared with the rest of the retrieved candidates.
+
+Outliers matter because some dispersion measures, especially variance and standard deviation, can change substantially because of one extreme value.
+
+## 16. Candidate Pool
+
+The **candidate pool** is the collection of documents returned by a retrieval system before later stages such as fusion or reranking.
+
+For example, if dense retrieval returns 100 documents and BM25 returns 100 documents, each 100-document list is a candidate pool for its respective modality.
+
+Statistics such as mean, variance, and CV depend on which candidates are included, so changing the candidate-pool size can change the measured distribution.
+
+## 17. The Research Trade-off
 
 The central trade-off is:
 
 - **Score fusion:** preserves magnitude information but requires score compatibility and tuning.
 - **RRF:** avoids score compatibility problems but discards magnitude information.
-- **Dynamic RRF:** investigates whether some information from the score distribution can influence the rank-decay parameter without abandoning rank-based fusion.
+- **Dynamic RRF:** investigates whether information from the score distribution can influence the rank-decay parameter without abandoning rank-based fusion.
 
 This is a research hypothesis, not an established result. The experiments must determine whether the proposed signal actually improves retrieval.
