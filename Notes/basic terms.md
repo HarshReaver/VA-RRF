@@ -17,13 +17,12 @@ The main difficulty is that different retrievers can produce scores on incompati
 RRF ignores raw score magnitude and combines the **rank positions** assigned by different retrievers.
 
 $$
-\text{RRF Score}(d) = \sum_{m \in M} \frac{1}{k + \operatorname{rank}_m(d)}
+\operatorname{RRF}(d) = \sum_{m \in M} \frac{1}{k + \operatorname{rank}_m(d)}
 $$
 
 where $M$ is the set of retrieval systems, $\operatorname{rank}_m(d)$ is the rank of document $d$ in system $m$, and $k$ is the smoothing constant.
 
-The standard formulation traditionally uses $k=60$.
-
+The standard formulation traditionally uses $k = 60$.
 ### Why RRF is useful
 
 Because it uses ranks rather than raw scores, RRF does not require the score scales of different retrievers to be aligned. This makes it particularly convenient for hybrid retrieval involving sparse and dense systems.
