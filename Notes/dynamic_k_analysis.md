@@ -1,88 +1,95 @@
 # Dynamic RRF $k$ Analysis
 
-This note records the literature-based reasoning behind investigating a query-dependent and modality-dependent RRF smoothing constant.
+This note explains why we are investigating a query-dependent and modality-dependent RRF smoothing constant.
 
 ## What $k$ changes
 
-RRF assigns each ranked document a contribution based on its rank:
+RRF gives each document a contribution based on its rank:
 
 $$
 \mathrm{RRF}(d)=\sum_{m \in M}\frac{1}{k+\mathrm{rank}_m(d)}
 $$
 
-The smoothing constant $k$ controls the **shape of rank decay**.
+The smoothing constant $k$ controls the **shape of rank decay**. With a smaller $k$, the first few ranks matter much more. With a larger $k$, the decay becomes flatter and lower-ranked documents remain more competitive.
 
-- Small $k$: top ranks receive relatively more influence.
-- Large $k$: rank contributions become flatter, so lower ranks remain more competitive.
+A simple real-life analogy is a recommendation list. A steep rule says, “being first matters much more than being fifth.” A flatter rule says, “several good positions should remain competitive.”
 
-A useful mental model is a recommendation list. With steep rank decay, being #1 matters much more than being #5. With flatter decay, several strong rankings across different lists can matter more collectively.
+## Why One Fixed $k$ May Not Be Enough
 
-## Why one fixed $k$ may be insufficient
+A fixed $k$ applies the same decay curve to every query. But retrieval behaviour can change from one query to another. Dense and sparse retrieval may agree strongly on one query and disagree strongly on another. Their behaviour can also change when the test data comes from a different domain.
 
-A fixed $k$ applies the same rank-decay behavior to every query. Retrieval conditions can vary across queries and domains: dense and sparse systems may agree strongly on some queries and disagree on others, and their effectiveness can change under domain shift.
+This does **not** prove that every query needs a different $k$. It gives us a reason to test whether one global value is always sufficient.
 
-This does not prove that every query needs a different $k$. It only provides a reason to investigate whether a single global value is always appropriate.
+## The Existing Choices
 
-## Existing ways to choose $k$
+The simplest choice is the established default $k=60$. It is useful because it gives us a clear and reproducible baseline.
 
-### Default $k=60$
+Another choice is offline tuning. We can test several values of $k$ on a validation dataset and keep the one that performs best on average. This can improve results for that dataset, but the selected value remains fixed after deployment.
 
-The standard RRF baseline uses $k=60$. It is useful because it is established and reproducible.
+The difference is important:
 
-### Offline tuning
+```text
+Offline tuning:
+Many queries → find one good k → use the same k everywhere
 
-A researcher can evaluate candidate values of $k$ on a validation dataset and select the best one according to a retrieval metric. This can improve average performance for the target distribution, but the selected value remains fixed during inference.
+Dynamic k:
+Current query → inspect current retrieval behaviour → choose k
+```
 
-## Why investigate dynamic $k$
+## Why Investigate Dynamic $k$?
 
-A dynamic $k$ would allow the fusion rule to respond to the current retrieval situation rather than using the same decay curve for every query.
+A dynamic $k$ could respond to the current retrieval situation instead of forcing every query to use the same decay curve.
 
-There are two distinct ideas:
+There are two related ideas. A **query-dependent $k$** chooses a value separately for each query. A **modality-dependent $k$** goes one step further and allows dense and sparse retrieval to use different values, such as $k_{dense}$ and $k_{sparse}$, for the same query.
 
-- **Query-dependent $k$:** choose $k$ separately for each query.
-- **Modality-dependent $k$:** allow dense and sparse retrieval to use different $k$ values for the same query.
+This is the main difference from grid search. Grid search learns one global compromise before deployment. Dynamic $k$ changes at inference time.
 
-These are different from offline global tuning because the value can change at inference time.
+## What Should Control $k$?
 
-## What should drive dynamic $k$?
+Once we decide that $k$ might change, we need a measurable signal that tells us when it should change.
 
-The next design question is what measurable property of the current retrieval results should control $k$.
+One candidate is **score dispersion**, which means how tightly or widely the retrieved scores are grouped. For example:
 
-One candidate is **score dispersion**: how tightly or widely the returned scores are grouped. For example:
+$$
+0.99,\ 0.70,\ 0.40,\ 0.15
+$$
 
-- $0.99, 0.70, 0.40, 0.15$ shows a sharp separation.
-- $0.99, 0.98, 0.97, 0.96$ shows a tight cluster.
+has a clear score separation, while:
 
-This information is not present in ranks alone. A rank-based method sees both examples simply as rank 1, rank 2, rank 3, and rank 4.
+$$
+0.99,\ 0.98,\ 0.97,\ 0.96
+$$
 
-The literature provides a reasonable basis for investigating score distributions as a query-dependent signal, but this does **not** prove that dispersion is a direct measure of relevance. A retriever can be confidently wrong, especially under domain shift.
+forms a much tighter group.
 
-## Why dispersion is attractive
+Both lists can have exactly the same rank positions. RRF sees rank 1, rank 2, rank 3, and rank 4 in both cases. Dispersion gives us another piece of information that rank alone does not contain.
 
-A dispersion statistic can be computed directly from the scores already returned by the retrieval system. It requires no neural model and can be used only to change $k$ while leaving the final fusion formula rank-based.
+However, a wide score spread does not prove that the top result is correct. A retriever can be confidently wrong. Dispersion is therefore a **heuristic signal**, not a direct relevance measure.
 
-This preserves the main operational advantage of RRF while allowing the research to test whether some score-distribution information can reduce its magnitude blindness.
+## Why This Fits the Research Goal
 
-## Important risks
+A dispersion statistic can be calculated from the scores that the retrievers already return. We do not need another neural model just to measure the shape of the score list.
 
-Dynamic dispersion-based control can fail in several ways:
+That gives us a simple pipeline:
 
-- **Outliers:** One extreme score can make the distribution appear more dispersed than it really is.
-- **Modality differences:** Dense and sparse scores can have very different numerical scales and shapes.
-- **Candidate-pool effects:** Statistics can change when the number of retrieved candidates changes.
-- **False confidence:** A sharp score separation can occur even when the top documents are irrelevant.
+```text
+Dense scores  → dispersion → k_dense ┐
+                                     ├→ RRF fusion
+Sparse scores → dispersion → k_sparse┘
+```
 
-Therefore, dispersion must be treated as a **heuristic signal**, not as a direct relevance score.
+The statistic only controls $k$. The final fusion remains rank-based.
 
-## What remains unanswered
+This is attractive because it tries to recover some information lost by RRF without replacing RRF with a completely different fusion system.
 
-The next question is which dispersion statistic is most appropriate for the two retrieval modalities.
+## What Can Go Wrong?
 
-Candidates include:
+A dynamic rule can fail in several ways. An outlier can make a score list look more dispersed than it normally is. Dense and sparse systems can have different score scales and shapes. Changing the number of retrieved candidates can also change the measured distribution. Finally, a sharp score separation can occur even when the retrieved documents are irrelevant.
 
-- Variance
-- Standard deviation
-- Coefficient of Variation (CV)
-- Interquartile Range (IQR)
+These risks mean that the dynamic rule must be tested against the fixed $k=60$ baseline. We cannot assume that a more adaptive rule is automatically better.
 
-The research must compare them before selecting one for the proposed method.
+## Current Research Question
+
+The next question is: **which statistical measure should represent dispersion?**
+
+Candidates are Variance, Standard Deviation, Coefficient of Variation (CV), and Interquartile Range (IQR). We should compare them before locking the final method.
