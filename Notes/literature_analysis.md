@@ -6,14 +6,18 @@ This document contains the detailed paper-by-paper analysis used to position Var
 
 * **Fusion Method Used:** **Reciprocal Rank Fusion (RRF)**, introducing the classic formula:
 
-  $$
-  \mathrm{RRF}(d)=\sum_{m \in M}\frac{1}{k+r_m(d)}
-  $$
+$$
+\mathrm{RRF}(d) = \sum_{m \in M} \frac{1}{k + r_m(d)}
+$$
 
-  where $k$ is the smoothing constant.
+where $k$ is the smoothing constant.
+
 * **Why RRF was Selected:** To find a "simple method for combining the document rankings from multiple IR systems" that did not require training or complex configuration.
+
 * **Problem RRF Solved:** It bypassed the high computational cost and heavy training data requirements of learning-to-rank algorithms on datasets like LETOR 3, while consistently yielding "better results than any individual system, and better results than the standard method Condorcet Fuse".
+
 * **Limitation of Previous Methods Addressed:** Standard rank aggregation methods like Condorcet Fuse were computationally complex and highly sensitive to poorly performing individual retrieval runs.
+
 * **Remaining Limitation of RRF:** The constant $k$ was arbitrarily set to 60 as a heuristic baseline. It remained static and empirical, with no mechanism to adapt to different retrieval runs or document score distributions.
 
 ---
