@@ -242,7 +242,117 @@ For example, if dense retrieval returns 100 documents and BM25 returns 100 docum
 
 Statistics such as mean, variance, and CV depend on which candidates are included, so changing the candidate-pool size can change the measured distribution.
 
-## 17. The Research Trade-off
+## 17. BEIR
+
+**BEIR** is a benchmark for evaluating information-retrieval systems across multiple datasets, tasks, and domains. It is useful here because our research should not be judged on one narrow collection alone.
+
+**Why it matters:** A method that works only on one dataset may simply be fitting that dataset's retrieval behaviour. Testing several different datasets gives us a better idea of whether an observation is general.
+
+**Practical note:** We do not need to run every available BEIR dataset. A small, deliberately chosen subset can be more realistic for an undergraduate experiment, provided the subset covers meaningfully different retrieval conditions.
+
+## 18. NDCG and NDCG@10
+
+**NDCG (Normalized Discounted Cumulative Gain)** measures how good a ranked list is by considering both relevance and position. A highly relevant document is worth more when it appears near the top than when it appears near the bottom.
+
+The practical question is: **Did we put the useful documents where the user will see them first?**
+
+### Real-life example
+
+Suppose two search systems both find the same three useful papers.
+
+- System A puts them at ranks 1, 2, and 3.
+- System B puts them at ranks 8, 9, and 10.
+
+Both systems found the papers, but System A produced a much better ranking. NDCG captures that difference.
+
+**NDCG@10** means we evaluate only the top 10 results. This keeps the metric focused on the part of the ranking we care about most for retrieval evaluation.
+
+### Limitation
+
+NDCG is most informative when the dataset provides graded relevance labels. With only binary relevance labels, it still measures ranking quality, but some of its graded-relevance advantage is lost.
+
+## 19. MRR
+
+**Mean Reciprocal Rank (MRR)** focuses on the position of the **first relevant result**.
+
+For one query:
+
+$$
+RR = \frac{1}{\mathrm{rank\ of\ first\ relevant\ result}}
+$$
+
+MRR is the average of this value over all queries.
+
+### Real-life example
+
+If the first useful result appears at rank 1, then:
+
+$$
+RR = 1
+$$
+
+If it appears at rank 5:
+
+$$
+RR = 0.2
+$$
+
+So MRR answers a very direct question: **How quickly does the system surface at least one useful result?**
+
+### Why use it with NDCG?
+
+MRR and NDCG measure different things. MRR mainly cares about the first useful result. NDCG cares about the quality and order of the broader ranked set.
+
+Using both can reveal effects that one metric alone might hide. A method might move one relevant document to rank 1 while making the rest of the top 10 worse, or it might improve the whole top 10 without changing the first hit much.
+
+### Limitation
+
+MRR does not reward additional relevant documents after the first one. That makes it less suitable as a standalone measure for tasks that need several pieces of evidence.
+
+## 20. Pre-computed Retrieval Runs
+
+A **pre-computed retrieval run** is a saved list of documents and scores produced earlier by a retrieval system.
+
+For example:
+
+```text
+Query 1 → BM25 → saved ranked list
+Query 1 → Dense retriever → saved ranked list
+```
+
+We can load these saved lists and test different fusion algorithms without running BM25, embedding models, or vector databases again.
+
+**Why this matters:** Our central research question concerns the **fusion step**. Using pre-computed runs lets us isolate that step and greatly reduce implementation work.
+
+## 21. CPU-only Fusion Evaluation
+
+The fusion experiment itself mainly performs numerical operations on already available retrieval results: ranking, arithmetic, and statistical calculations such as standard deviation.
+
+A CPU is sufficient for this stage. This does **not** mean the entire retrieval pipeline is CPU-only. Dense embedding generation and dense retrieval can require substantial model computation.
+
+### What we can claim
+
+We can measure the CPU time required by the **fusion and dynamic-$k$ calculation** and report it as an additional systems metric.
+
+We should not claim that the complete real-world hybrid retrieval pipeline is automatically cheap or CPU-only.
+
+## 22. Baseline
+
+A **baseline** is a reference method used for comparison.
+
+For this research, standard RRF with fixed $k=60$ is the main baseline. We need it because an experimental method has no meaning unless we can show whether it improves over a known reference.
+
+**Real-life analogy:** If you modify a car engine, you first compare it with the original engine under the same conditions. The original is the baseline.
+
+## 23. Candidate Method
+
+A **candidate method** is a possible approach that we are willing to test but have not yet accepted as the final method.
+
+In this research, dispersion statistics such as CV, SD-based measures, or IQR are candidates. A candidate can be rejected after experiments.
+
+This distinction is important: **being discussed in the research notes does not mean that it has been selected as the final algorithm.**
+
+## 24. The Research Trade-off
 
 The central trade-off is:
 
