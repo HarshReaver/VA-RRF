@@ -7,7 +7,7 @@ This note records the NotebookLM analysis used to build the `Problem` and `Exist
 In RRF, the smoothing constant $k$ controls how quickly the contribution of rank decreases.
 
 $$
-RRF(d)=\sum_{m \in M}\frac{1}{k+r_m(d)}
+\mathrm{RRF}(d)=\sum_{m \in M}\frac{1}{k+\mathrm{rank}_m(d)}
 $$
 
 A smaller $k$ makes rank differences more influential, so top-ranked documents receive a stronger advantage. A larger $k$ flattens the decay and makes lower ranks contribute more similarly to higher ranks.
@@ -60,31 +60,46 @@ Learned fusion methods learn how to combine retrieval signals, while neural rera
 
 They therefore address a broader semantic-ranking problem rather than specifically modifying the RRF rank-decay mechanism.
 
+## 6. Adaptive Top-K
+
+Adaptive Top-K changes the number of retrieved documents or chunks retained for downstream processing according to the query or retrieval conditions.
+
+**What it solves:** Fixed Top-K can pass unnecessary context for simple queries or insufficient context for complex queries. Adaptive Top-K addresses this context-quantity problem by changing the cutoff.
+
+**Advantage:** It can reduce downstream token usage and latency while retaining more context when needed.
+
+**Limitation:** It does not change the underlying ranking. If an important document is ranked poorly before the cutoff is applied, Adaptive Top-K does not correct that ranking.
+
+**Why it is different from dynamic RRF $k$:** RRF $k$ controls the decay of rank contributions during list fusion. Adaptive Top-K controls how many documents are retained after ranking. They act at different stages of the retrieval pipeline.
+
+## 7. Learned Fusion Weights
+
+Learned fusion weights adjust the contribution of different retrieval channels, for example by learning weights for dense and sparse retrieval scores.
+
+**How it differs from offline RRF tuning:** Offline grid search selects a value of $k$ from candidate values for a validation distribution. Learned fusion learns how strongly different retrieval signals should contribute, potentially using supervised data or validation data.
+
+**Advantage:** Properly tuned or learned fusion can exploit differences in retriever quality and may outperform an untuned RRF baseline in settings where suitable data is available.
+
+**Limitation:** Learned approaches can require relevance judgments, training or validation data, tuning, and potentially retraining when the retrieval environment changes.
+
+**Why it remains a relevant alternative:** It represents a data-driven way of changing fusion behavior, whereas our research direction investigates whether the retrieval results themselves can provide enough information for inference-time adaptation without supervised training.
+
 ## Overall Problem Chain
 
 ```text
 RRF uses a fixed k
-
         ↓
-
 k controls rank contribution and decay
-
         ↓
 
 Different retrieval conditions may favor different decay behavior
 
         ↓
-
 Existing approaches include offline k tuning,
-score normalization, neural/learned reranking,
-adaptive Top-K, and learned fusion weights
-
+score normalization, and neural/learned reranking
         ↓
-
-These approaches involve static tuning,
-raw-score transformation, post-ranking context selection,
-or additional model/data requirements
-
+These approaches involve either static tuning,
+raw-score transformation, or additional model complexity
         ↓
 
 Research question:
@@ -92,4 +107,5 @@ Research question:
 Can RRF's rank-decay behavior be adapted at inference time
 using information already present in the current retrieval results?
 ```
+
 **Important distinction:** This note does not establish VA-RRF as novel. It only documents the problem and existing solution space that must be considered before evaluating the proposed method.
