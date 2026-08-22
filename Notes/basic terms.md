@@ -17,10 +17,10 @@ The main difficulty is that different retrievers can produce scores on incompati
 RRF ignores raw score magnitude and combines the **rank positions** assigned by different retrievers.
 
 $$
-\operatorname{RRF}(d) = \sum_{m \in M} \frac{1}{k + \operatorname{rank}_m(d)}
+\mathrm{RRF}(d) = \sum_{m \in M} \frac{1}{k + \mathrm{rank}_m(d)}
 $$
 
-where $M$ is the set of retrieval systems, $\operatorname{rank}_m(d)$ is the rank of document $d$ in system $m$, and $k$ is the smoothing constant.
+where $M$ is the set of retrieval systems, $\mathrm{rank}_m(d)$ is the rank of document $d$ in system $m$, and $k$ is the smoothing constant.
 
 The standard formulation traditionally uses $k = 60$.
 ### Why RRF is useful
