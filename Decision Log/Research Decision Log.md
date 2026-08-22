@@ -126,7 +126,27 @@ This file records methodological decisions and the reasoning behind them. It is 
 
 ### Adaptive Top-K
 
+**Approach:** Adapt the number of retrieved documents or chunks retained for downstream processing according to the query or retrieval conditions.
+
+**Why it is used:** Fixed Top-K can pass unnecessary context for simple queries or insufficient context for complex queries. Adaptive Top-K addresses this context-quantity problem by changing the cutoff.
+
+**Advantage:** It can reduce downstream token usage and latency while retaining more context when needed.
+
+**Limitation:** It does not change the underlying ranking. If an important document is ranked poorly before the cutoff is applied, Adaptive Top-K does not correct that ranking.
+
+**Why it is different from dynamic RRF $k$:** RRF $k$ controls the decay of rank contributions during list fusion. Adaptive Top-K controls how many documents are retained after ranking. They act at different stages of the retrieval pipeline.
+
 ### Learned Fusion Weights
+
+**Approach:** Learn or tune weights that control the contribution of different retrieval channels.
+
+**Why it is used:** Dense and sparse retrievers can have different strengths, so weighting their contributions can improve the final ranking.
+
+**Advantage:** Properly tuned or learned fusion can exploit differences in retriever quality and may outperform an untuned RRF baseline when suitable validation or training data is available.
+
+**Limitation:** Learned approaches can require relevance judgments, training or validation data, tuning, and potentially retraining when the retrieval environment changes.
+
+**Why it does not fully solve the problem:** It represents a data-driven change in channel importance rather than a query-specific adaptation of RRF's rank-decay function without supervised training.
 
 ## Our Solution
 
