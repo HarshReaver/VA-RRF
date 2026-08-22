@@ -88,18 +88,25 @@ Learned fusion weights adjust the contribution of different retrieval channels, 
 
 ```text
 RRF uses a fixed k
+
         ↓
+
 k controls rank contribution and decay
+
         ↓
 
 Different retrieval conditions may favor different decay behavior
 
         ↓
+
 Existing approaches include offline k tuning,
 score normalization, and neural/learned reranking
+
         ↓
+
 These approaches involve either static tuning,
 raw-score transformation, or additional model complexity
+
         ↓
 
 Research question:
