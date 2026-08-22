@@ -44,12 +44,45 @@ There are two distinct ideas:
 
 These are different from offline global tuning because the value can change at inference time.
 
-## Important limitation
+## What should drive dynamic $k$?
 
-Dynamic $k$ is only a research direction at this stage. It introduces a new mapping rule that could be unstable or could perform worse than the fixed $k=60$ baseline. The mapping must therefore be justified and tested rather than assumed to be beneficial.
+The next design question is what measurable property of the current retrieval results should control $k$.
+
+One candidate is **score dispersion**: how tightly or widely the returned scores are grouped. For example:
+
+- $0.99, 0.70, 0.40, 0.15$ shows a sharp separation.
+- $0.99, 0.98, 0.97, 0.96$ shows a tight cluster.
+
+This information is not present in ranks alone. A rank-based method sees both examples simply as rank 1, rank 2, rank 3, and rank 4.
+
+The literature provides a reasonable basis for investigating score distributions as a query-dependent signal, but this does **not** prove that dispersion is a direct measure of relevance. A retriever can be confidently wrong, especially under domain shift.
+
+## Why dispersion is attractive
+
+A dispersion statistic can be computed directly from the scores already returned by the retrieval system. It requires no neural model and can be used only to change $k$ while leaving the final fusion formula rank-based.
+
+This preserves the main operational advantage of RRF while allowing the research to test whether some score-distribution information can reduce its magnitude blindness.
+
+## Important risks
+
+Dynamic dispersion-based control can fail in several ways:
+
+- **Outliers:** One extreme score can make the distribution appear more dispersed than it really is.
+- **Modality differences:** Dense and sparse scores can have very different numerical scales and shapes.
+- **Candidate-pool effects:** Statistics can change when the number of retrieved candidates changes.
+- **False confidence:** A sharp score separation can occur even when the top documents are irrelevant.
+
+Therefore, dispersion must be treated as a **heuristic signal**, not as a direct relevance score.
 
 ## What remains unanswered
 
-The next question is: **what measurable property of the current retrieval results should determine the dynamic $k$?**
+The next question is which dispersion statistic is most appropriate for the two retrieval modalities.
 
-Candidates to investigate include score dispersion measures such as variance, standard deviation, coefficient of variation, and IQR. These are candidates only; the literature review and experiments must determine whether any of them are appropriate.
+Candidates include:
+
+- Variance
+- Standard deviation
+- Coefficient of Variation (CV)
+- Interquartile Range (IQR)
+
+The research must compare them before selecting one for the proposed method.
