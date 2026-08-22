@@ -152,13 +152,21 @@ This file records methodological decisions and the reasoning behind them. It is 
 
 ### Why Dynamic $k$?
 
-### Why dispersion?
+**Decision:** Investigate query-dependent and modality-dependent RRF $k$ instead of using one fixed value for every retrieval situation.
 
-### Why CV?
+**Reason:** Changing $k$ changes the slope of RRF's rank decay. A smaller $k$ makes top ranks contribute more strongly, while a larger $k$ makes the decay flatter and allows lower ranks to remain more competitive.
 
-### Why compare Variance, SD, CV, and IQR?
+**Why a fixed value may be insufficient:** The literature reports sensitivity to RRF parameters, while retrieval behavior can vary across queries, retrievers, and domains. A single global $k$ therefore represents a compromise across heterogeneous retrieval conditions rather than a response to each query.
 
-### Why zero-shot and unsupervised?
+**Alternatives considered:** Keeping $k=60$ and selecting a single tuned $k$ through offline validation or grid search.
+
+**Why not selected:** These approaches produce one global value. They can improve average performance for a known validation distribution but cannot react to the retrieval characteristics of an individual query at inference time.
+
+**Potential advantage:** A query-dependent $k$ could alter the rank-decay behavior according to the current retrieval situation. A modality-dependent value could allow dense and sparse lists to use different decay settings for the same query.
+
+**Risk:** Dynamic adaptation introduces a new mapping rule and may reduce stability if the mapping is poorly designed. Any improvement must therefore be demonstrated experimentally against standard RRF with $k=60$ and other relevant baselines.
+
+**Research relevance:** The literature provides a reasonable motivation for investigating dynamic $k$, but it does not by itself establish that a particular dynamic mechanism will work. The next research question is what measurable property of the current retrieval results should drive the adaptation.
 
 ## Evaluation
 
