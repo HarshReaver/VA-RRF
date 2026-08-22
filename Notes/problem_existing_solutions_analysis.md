@@ -64,20 +64,32 @@ They therefore address a broader semantic-ranking problem rather than specifical
 
 ```text
 RRF uses a fixed k
+
         ↓
+
 k controls rank contribution and decay
+
         ↓
+
 Different retrieval conditions may favor different decay behavior
+
         ↓
+
 Existing approaches include offline k tuning,
-score normalization, and neural/learned reranking
+score normalization, neural/learned reranking,
+adaptive Top-K, and learned fusion weights
+
         ↓
-These approaches involve either static tuning,
-raw-score transformation, or additional model complexity
+
+These approaches involve static tuning,
+raw-score transformation, post-ranking context selection,
+or additional model/data requirements
+
         ↓
+
 Research question:
+
 Can RRF's rank-decay behavior be adapted at inference time
 using information already present in the current retrieval results?
 ```
-
 **Important distinction:** This note does not establish VA-RRF as novel. It only documents the problem and existing solution space that must be considered before evaluating the proposed method.
